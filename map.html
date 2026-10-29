@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Manzilni tanlang</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  #map { position: absolute; inset: 0; }
+  #pin { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -100%);
+         font-size: 42px; z-index: 1000; pointer-events: none; }
+  #top { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 1001; display: flex; gap: 6px; }
+  #q { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #ccc; font-size: 16px; }
+  #go { padding: 0 16px; border-radius: 10px; border: 0; background: #2481cc; color: #fff; font-size: 18px; }
+  #res { position: absolute; top: 62px; left: 10px; right: 10px; z-index: 1001; background: #fff;
+         border-radius: 10px; box-shadow: 0 2px 10px #0003; max-height: 45%; overflow: auto; display: none; }
+  #res div { padding: 11px 12px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 14px; color: #222; }
+  #me { position: absolute; right: 12px; bottom: 130px; z-index: 1001; width: 48px; height: 48px;
+        border-radius: 50%; border: 0; background: #fff; box-shadow: 0 2px 10px #0003; font-size: 22px; }
+  #bottom { position: absolute; bottom: 0; left: 0; right: 0; z-index: 1001; background: #fff;
+            padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -2px 10px #0002; }
+  #addr { font-size: 14px; color: #333; min-height: 20px; margin-bottom: 8px; }
+  #ok { width: 100%; padding: 14px; border: 0; border-radius: 10px; background: #2481cc;
+        color: #fff; font-size: 17px; font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="pin">📍</div>
+<div id="top">
+  <input id="q" placeholder="Manzilni qidiring…">
+  <button id="go">🔍</button>
+</div>
+<div id="res"></div>
+<button id="me" title="Mening joyim">🎯</button>
+<div id="bottom">
+  <div id="addr">Xaritani suring va pinni kerakli joyga qo’ying</div>
+  <button id="ok">✅ Shu joyni tanlash</button>
+</div>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+
+// Boshlang'ich nuqta — Toshkent
+const map = L.map("map", { zoomControl: false }).setView([41.311, 69.279], 12);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+            { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+
+const addrEl = document.getElementById("addr");
+let address = "";
+let timer;
+
+// Pin turgan joyning manzilini aniqlash
+async function reverse() {
+  const c = map.getCenter();
+  address = "";
+  addrEl.textContent = "Manzil aniqlanmoqda…";
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${c.lat}&lon=${c.lng}&zoom=18&accept-language=uz,ru`);
+    const j = await r.json();
+    const a = j.address || {};
+    address = [a.road, a.house_number, a.suburb || a.city_district, a.city || a.town || a.village]
+                .filter(Boolean).join(", ") || j.display_name || "";
+  } catch (e) {}
+  addrEl.textContent = address || `${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`;
+}
+map.on("moveend", () => { clearTimeout(timer); timer = setTimeout(reverse, 600); });
+
+// Mening joyim
+function locate() { map.locate({ setView: true, maxZoom: 17 }); }
+document.getElementById("me").onclick = locate;
+locate();
+reverse();
+
+// Manzil qidirish
+const box = document.getElementById("res");
+async function search() {
+  const q = document.getElementById("q").value.trim();
+  if (!q) return;
+  box.innerHTML = "<div>Qidirilmoqda…</div>";
+  box.style.display = "block";
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=uz&limit=6&accept-language=uz,ru&q=${encodeURIComponent(q)}`);
+    const list = await r.json();
+    box.innerHTML = "";
+    if (!list.length) { box.innerHTML = "<div>Topilmadi — xaritadan belgilang.</div>"; return; }
+    list.forEach(p => {
+      const d = document.createElement("div");
+      d.textContent = p.display_name;
+      d.onclick = () => { map.setView([p.lat, p.lon], 17); box.style.display = "none"; };
+      box.appendChild(d);
+    });
+  } catch (e) {
+    box.innerHTML = "<div>Xatolik. Qayta urinib ko’ring.</div>";
+  }
+}
+document.getElementById("go").onclick = search;
+document.getElementById("q").addEventListener("keydown", e => { if (e.key === "Enter") search(); });
+map.on("click", () => { box.style.display = "none"; });
+
+// Tanlangan joyni botga yuborish
+document.getElementById("ok").onclick = () => {
+  const c = map.getCenter();
+  tg.sendData(JSON.stringify({ lat: c.lat, lon: c.lng, address: address }));
+};
+</script>
+</body>
+</html>
