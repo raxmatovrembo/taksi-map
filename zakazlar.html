@@ -41,8 +41,8 @@ const map = L.map("map", { zoomControl: false }).setView([40.22, 69.27], 9);   /
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
             { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
 
-const top = document.getElementById("top");
-top.textContent = isOrders
+const topBar = document.getElementById("top");
+topBar.textContent = isOrders
   ? `🚕 Olinmagan zakazlar: ${items.length} ta. Nuqtani bosing → «Olaman».`
   : `🚗 Tayyor mashinalar: ${items.length} ta. Mashinani bosing → «Joy band qilish».`;
 
@@ -86,7 +86,7 @@ map.on("locationfound", e => {
   // eng yaqinini aytib qo'yamiz
   if (items.length) {
     const near = items.map(it => [km(myPos, [it.a, it.o]), it]).sort((x, y) => x[0] - y[0])[0];
-    top.textContent += `  Eng yaqini: ${near[0].toFixed(1)} km.`;
+    topBar.textContent += `  Eng yaqini: ${near[0].toFixed(1)} km.`;
   }
 });
 document.getElementById("me").onclick = () => {
