@@ -12,6 +12,8 @@
   #map { position: absolute; inset: 0; }
   #top { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 1001; background: #fff;
          border-radius: 10px; padding: 10px 12px; box-shadow: 0 2px 10px #0003; font-size: 14px; color: #222; }
+  #layer { position: absolute; right: 12px; bottom: 84px; z-index: 1001; width: 48px; height: 48px;
+           border-radius: 50%; border: 0; background: #fff; box-shadow: 0 2px 10px #0003; font-size: 22px; }
   #me { position: absolute; right: 12px; bottom: 24px; z-index: 1001; width: 48px; height: 48px;
         border-radius: 50%; border: 0; background: #fff; box-shadow: 0 2px 10px #0003; font-size: 22px; }
   .pop { font-size: 14px; line-height: 1.45; white-space: pre-line; color: #222; }
@@ -24,6 +26,7 @@
 <div id="map"></div>
 <div id="top">Yuklanmoqda…</div>
 <button id="me" title="Mening joyim">🎯</button>
+<button id="layer" title="Sputnik / xarita">🛰</button>
 
 <script>
 const tg = window.Telegram.WebApp;
@@ -38,8 +41,26 @@ const items = data.items || [];
 const isOrders = data.m === "o";
 
 const map = L.map("map", { zoomControl: false }).setView([40.22, 69.27], 9);   // Bekobod atrofi
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-            { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+// ====== XARITA QATLAMLARI ======
+// Mapbox token (mapbox.com → Account → Tokens, "pk." bilan boshlanadi). Bo'sh bo'lsa — faqat oddiy xarita.
+const MAPBOX_TOKEN = "pk.eyJ1IjoicmF4bWF0b3ZyZW1ibyIsImEiOiJjbXZ5dmpnM2wxMnk0MnpyNjZvYjFqaHI5In0.YKrgs5Ir1BZdq14FHejzLQ";
+const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                        { maxZoom: 19, attribution: "© OpenStreetMap" });
+const sat = MAPBOX_TOKEN ? L.tileLayer(
+  "https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=" + MAPBOX_TOKEN,
+  { tileSize: 512, zoomOffset: -1, maxZoom: 20, attribution: "© Mapbox © OpenStreetMap © Maxar" }) : null;
+let current = sat || osm;
+current.addTo(map);
+const layerBtn = document.getElementById("layer");
+if (!sat) { layerBtn.style.display = "none"; }
+layerBtn.textContent = current === sat ? "🗺" : "🛰";
+layerBtn.onclick = () => {
+  map.removeLayer(current);
+  current = current === sat ? osm : sat;
+  current.addTo(map);
+  layerBtn.textContent = current === sat ? "🗺" : "🛰";   // keyingi bosilganda nimaga o'tishi
+};
+// ================================
 
 const topBar = document.getElementById("top");
 topBar.textContent = isOrders
