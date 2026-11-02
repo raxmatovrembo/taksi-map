@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Xarita</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  #map { position: absolute; inset: 0; }
+  #top { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 1001; background: #fff;
+         border-radius: 10px; padding: 10px 12px; box-shadow: 0 2px 10px #0003; font-size: 14px; color: #222; }
+  #me { position: absolute; right: 12px; bottom: 24px; z-index: 1001; width: 48px; height: 48px;
+        border-radius: 50%; border: 0; background: #fff; box-shadow: 0 2px 10px #0003; font-size: 22px; }
+  .pop { font-size: 14px; line-height: 1.45; white-space: pre-line; color: #222; }
+  .btn { display: block; width: 100%; margin-top: 8px; padding: 10px; border: 0; border-radius: 8px;
+         background: #2481cc; color: #fff; font-size: 15px; font-weight: 600; }
+  .dist { color: #2481cc; font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="top">Yuklanmoqda…</div>
+<button id="me" title="Mening joyim">🎯</button>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+
+let data = { m: "o", items: [] };
+try {
+  data = JSON.parse(new URLSearchParams(location.search).get("d") || "{}");
+} catch (e) {}
+const items = data.items || [];
+const isOrders = data.m === "o";
+
+const map = L.map("map", { zoomControl: false }).setView([40.22, 69.27], 9);   // Bekobod atrofi
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+            { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+
+const top = document.getElementById("top");
+top.textContent = isOrders
+  ? `🚕 Olinmagan zakazlar: ${items.length} ta. Nuqtani bosing → «Olaman».`
+  : `🚗 Tayyor mashinalar: ${items.length} ta. Mashinani bosing → «Joy band qilish».`;
+
+let myPos = null;
+const markers = [];
+
+function km(a, b) {
+  const R = 6371, r = Math.PI / 180;
+  const dLa = (b[0] - a[0]) * r, dLo = (b[1] - a[1]) * r;
+  const h = Math.sin(dLa / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dLo / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function popupHtml(it) {
+  const d = myPos ? `<div class="dist">📏 Sizdan ${km(myPos, [it.a, it.o]).toFixed(1)} km</div>` : "";
+  const label = isOrders ? "✅ Olaman" : "✅ Joy band qilish";
+  return `<div class="pop">${esc(it.t)}</div>${d}<button class="btn" onclick="pick(${it.i})">${label}</button>`;
+}
+
+items.forEach(it => {
+  const mk = L.marker([it.a, it.o]).addTo(map).bindPopup(() => popupHtml(it));
+  markers.push(mk);
+});
+if (markers.length) {
+  map.fitBounds(L.featureGroup(markers).getBounds().pad(0.2), { maxZoom: 15 });
+}
+
+window.pick = function (id) {
+  tg.sendData(JSON.stringify({ act: isOrders ? "take" : "book", id: id }));
+};
+
+function locate() { map.locate({ setView: false }); }
+map.on("locationfound", e => {
+  myPos = [e.latlng.lat, e.latlng.lng];
+  L.circleMarker(e.latlng, { radius: 8, color: "#fff", weight: 3, fillColor: "#2481cc", fillOpacity: 1 })
+    .addTo(map).bindPopup("Siz shu yerdasiz");
+  // eng yaqinini aytib qo'yamiz
+  if (items.length) {
+    const near = items.map(it => [km(myPos, [it.a, it.o]), it]).sort((x, y) => x[0] - y[0])[0];
+    top.textContent += `  Eng yaqini: ${near[0].toFixed(1)} km.`;
+  }
+});
+document.getElementById("me").onclick = () => {
+  locate();
+  if (myPos) map.setView(myPos, 14);
+};
+locate();
+</script>
+</body>
+</html>
